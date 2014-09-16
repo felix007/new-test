@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+
+		<!-- Always force latest IE rendering engine (even in intranet) & Chrome Frame
+		Remove this if you use the .htaccess -->
+		<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+
+		<title>HTML</title>
+		<meta name="description" content="">
+		<meta name="author" content="felix wasserstein">
+
+		<meta name="viewport" content="width=device-width; initial-scale=1.0">
+
+		<!-- Replace favicon.ico & apple-touch-icon.png in the root of your domain and delete these references -->
+		<link rel="shortcut icon" href="/favicon.ico">
+		<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+		
+		
+		
+
+<style type="text/css" media="screen">
+			html, body {
+  background-color: #EDEBEE;
+}
+#content {
+  position: relative;
+  width: 80%; 
+  margin: auto;
+}
+article {
+  margin: 4em 0;
+  padding: 1em 0;
+}
+h1, .indicator-tooltip {
+  margin-top: 0;
+  font-family: helvetica, sans-serif;
+  font-weight: 100;
+  -webkit-font-smoothing: antialiased;
+}
+h1 {
+  font-size: 3em;
+  color: #806973;
+}
+p {
+  font-family: georgia, serif;
+  line-height: 1.5em;
+}
+
+
+.indicator {
+  display: inline-block;
+  right: 1em;
+  padding: 0.3em;
+  background: #806973;
+  border-radius: 50%;
+  opacity: 0.5;
+  transition: opacity 0.5s;
+}
+.indicator--passed, .indicator--upcoming {
+  position: fixed;
+}
+.indicator--passed { 
+  top: 0 !important;
+}
+.indicator--upcoming { 
+  bottom: 0 !important;
+}
+.indicator--active {
+  position: absolute;
+}
+.indicator--viewing, .indicator:hover {
+  opacity: 1;
+}
+
+.indicator-tooltip {
+  position: absolute;
+  right: 2em;
+  width: 0;
+  margin-top: -1em;
+  background-color: #806973;
+  color: #FFF;
+  white-space: nowrap;
+  border-radius: 3px;
+  overflow: hidden;
+  z-index: -1;
+}
+.indicator-tooltip:after {
+  display: block;
+  content: '';
+  position: absolute;
+  right: -0.9em;
+  top: 50%;
+  width: 0;
+  height: 0;
+  margin-top: -0.4em;
+  border: 0.4em solid transparent;
+  border-left: 0.5em solid #806973;
+}
+.indicator:hover .indicator-tooltip {
+  width: auto;
+  padding: 0.5em;
+  overflow: visible;
+  z-index: 1;
+}
+		</style>
+	
+	
+			<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+
+			<script src="http://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.5.2/underscore-min.js"></script>
+			
+			
+	<script type="text/javascript" charset="utf-8">
+		
+		
+		jQuery(document).ready(function($) {
+
+
+
+
+// Global var to cache info about indicators for easy access. 
+var indicators = [];
+
+$(window).load(function(){
+
+  //
+  //	CREATE THE INDICATORS AND ADD TO PAGE
+  //
+
+  var rawIndicators = "";
+  var $articles = $("article");
+  // Create a bubble for each article
+  $articles.each(function(i) {
+    var iInverse = $articles.length - i - 1;
+    // Top margin is a function of the nodes before it, bottom is proportional to those after. determines stacking at top / bottom static positions
+    var margins = 'margin: ' + (i+0.5) + 'em 0 ' + (iInverse+0.5) + 'em 0;'; 
+    rawIndicators +=  '<a class="indicator indicator--upcoming" style="' + margins + '" href="#' + this.id + '"><span class="indicator-tooltip">' + $(this).find("h1").text() + '</span></a>';
+  });
+  $("body").append(rawIndicators);
+
+  // Utility function to calculate the proper top coordinate for a bubble when it's on the move (position: absolute)
+  var getNodeTopPos = function(indicator, target) {
+    var indMargTop = parseInt(indicator.css("margin-top").replace("px", ""));
+    var targCenter =  target.outerHeight(false)/2;
+    var indCenter = indicator.outerHeight(false)/2;
+    return target.offset().top - indMargTop + targCenter - indCenter;
+  }
+
+
+  // 
+  // INITIAL SET UP OF INDICATOR OBJECT
+  //
+
+  var calcIndicatorInfo = function(){
+
+    indicators = []
+    $(".indicator").each(function(){
+      
+      var o = {
+        $indicator: $(this),
+        $target: $( $(this).attr("href") ),
+        $targetTitle: $( $(this).attr("href") + " h1" )
+      };
+
+      // When it's abs positioned (on the move), this is the top pos
+      o.absPos = getNodeTopPos(o.$indicator, o.$targetTitle); 
+
+      // When it's abs positioned, at this scroll pos we should make the indicator fixed to the bottom
+      o.absBottomStop = window.innerHeight - (o.absPos + o.$indicator.outerHeight(true));
+
+      // Top / bottom stops for being 'viewable'
+      o.viewableTopStop = o.$target.offset().top - window.innerHeight;
+      o.viewableBottomStop = o.$target.offset().top + o.$target.outerHeight();
+      indicators[indicators.length] = o;
+      
+    });
+  };
+
+  //
+  // ON RESIZE FUNCTION - UPDATE THE CACHED POSITON VALUES
+  //
+
+  var initIndicators = function() {
+    calcIndicatorInfo();
+    // Bug fix - without timeout scroll top reports 0, even when it scrolls down the page to last page loaded position
+    // http://stackoverflow.com/questions/16239520/chrome-remembers-scroll-position
+    setTimeout(function(){
+      var st = $(document).scrollTop();
+      $(indicators).each(function(){
+        if(st<=this.absPos && st>=(-1*this.absBottomStop))
+          this.$indicator.removeClass("indicator--upcoming").removeClass("indicator--passed").addClass("indicator--active")
+              .css({ "top" : this.absPos });
+        else if(st>=(-1*this.absBottomStop)) 
+          this.$indicator.removeClass("indicator--active").removeClass("indicator--upcoming").addClass("indicator--passed").css({ "top" : "" });
+        else
+          this.$indicator.removeClass("indicator--active").removeClass("indicator--passed").addClass("indicator--upcoming").css({ "top" : "" });
+        
+        if(st>=this.viewableTopStop && st<=(this.viewableBottomStop))
+          this.$indicator.addClass("indicator--viewing");
+        else
+          this.$indicator.removeClass("indicator--viewing");
+      });
+    }, 0);
+  }
+
+  //
+  // SCROLL FUNCTION - UPDATE ALL OF THE INDICATORS
+  //
+
+  var adjustIndicators = function() {
+    var st = $(document).scrollTop();
+
+    // The indicators that SHOULD be scrolling
+    var anticipated = _.filter(indicators, function(o) { return (st<=o.absPos && st>=(-1*o.absBottomStop)) });
+
+    // The $ elements that are indeed scrolling
+    var active$ = $(".indicator--active");
+
+    // Anything in anticipated that isn't in active should be activated ...
+    var needsActivation = _.filter(anticipated, function(o) { return !_.contains(active$, o.$indicator[0]); })
+
+    // ... And anything thats in active that isn't in anticipated needs to be stopped. 
+    var anticipatedEls = _.pluck(anticipated, "$indicator");
+    var needsDeactivation = _.filter(active$, function(o) { 
+      return !_.find(anticipatedEls, function(e){ return e[0] == o }); 
+    });
+
+    // Do the Activation
+    _.each(needsActivation, function(o) {
+      o.$indicator
+        .removeClass("indicator--upcoming").removeClass("indicator--passed")
+        .addClass("indicator--active")
+        .css({ "top" : o.absPos })
+    });
+
+    _.each(needsDeactivation, function(i$){
+      var indicator = _.find(indicators, function(i) {
+        return i.$indicator[0] == i$;
+      });
+      if(st>=indicator.absPos) {
+        // Went off top. now passed. 
+        indicator.$indicator.removeClass("indicator--active").addClass("indicator--passed").css({ "top" : "" });
+      }
+      else {
+        // Went off bottom. now upcoming. 
+        indicator.$indicator.removeClass("indicator--active").addClass("indicator--upcoming").css({ "top" : "" });
+      }
+    });
+
+    $(indicators).each(function(){
+      if(st>=this.viewableTopStop && st<=(this.viewableBottomStop))
+        this.$indicator.addClass("indicator--viewing");
+      else
+        this.$indicator.removeClass("indicator--viewing");
+    });
+
+  }
+
+  //
+  // BIND EVENTS
+  //
+
+  $(document).scroll(function() {
+    adjustIndicators();
+  });
+  $(window).resize(function() {
+    initIndicators();
+    adjustIndicators();
+  });
+  
+  initIndicators();
+  adjustIndicators();
+  
+  $(".indicator").click(function(){
+    initIndicators();
+    adjustIndicators();
+  })
+
+});
+
+});
+	</script>	
+	
+	
+	
+	</head>
+
+
+
+	<body>
+		
+		<div id="content">
+  <article id="sf">
+    <h1>San Francisco</h1>
+    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec a urna lobortis, laoreet libero ut, vulputate risus. Aenean rhoncus, tellus nec cursus tempus, magna nisi pellentesque odio, mattis volutpat nunc mauris eget orci. Vivamus quis tellus pellentesque, vulputate diam vel, facilisis risus. Nulla mi felis, euismod ac est in, ultrices tempus nisl. Ut et commodo mi. Sed rutrum porttitor est posuere ullamcorper. Aliquam dapibus nibh id viverra malesuada. Suspendisse quis sem eu nibh varius gravida ut ac magna. Suspendisse massa nisi, malesuada a nisl et, iaculis auctor dolor. Fusce ultrices, mauris non placerat eleifend, nibh sapien sodales velit, sit amet viverra enim erat sed elit. Maecenas facilisis dui eu ullamcorper laoreet. Maecenas pharetra sem id vehicula scelerisque.</p><p>
+    Ut a fringilla orci. Donec nec erat in leo posuere hendrerit. Cras posuere vehicula tellus, ac pharetra mauris sagittis ut. Curabitur at ante malesuada, sagittis dolor ut, laoreet erat. Curabitur eu justo eros. Aliquam ac ipsum quis nulla lacinia varius. Cras tempus aliquet erat at imperdiet. Integer sagittis tincidunt commodo. Fusce lacinia blandit leo vel bibendum. Pellentesque hendrerit nibh ac nunc porta, quis tempor odio aliquet. Nulla sed iaculis sapien. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Integer sollicitudin, lacus vel lobortis luctus, elit magna lobortis turpis, id cursus magna nunc vel magna. Etiam sit amet condimentum nisl. Aenean in leo vehicula ante dapibus laoreet. Nunc in massa a leo sollicitudin facilisis non non orci.</p><p>
+    Nunc lorem nisi, scelerisque quis arcu non, dapibus fermentum arcu. Cras nec facilisis neque. Fusce ultricies nunc nunc, interdum ultrices magna vestibulum in. Suspendisse sed sollicitudin urna. Etiam faucibus aliquet erat. Morbi vel nunc hendrerit arcu hendrerit ultricies. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Nullam tempus luctus sapien vitae porta. Ut eget sapien ut ipsum suscipit porta. Mauris sed dui ac tellus elementum bibendum fringilla id ante. Sed ut felis non lorem venenatis feugiat. Duis cursus, enim sit amet volutpat elementum, diam turpis scelerisque massa, vitae pretium neque velit id arcu. Maecenas at enim id magna gravida bibendum. Vivamus sit amet enim dolor.
+    Aenean sollicitudin massa id diam rutrum aliquam. Aenean eget tincidunt felis. Morbi condimentum arcu orci, at malesuada metus blandit quis. Praesent nec massa elit. Vivamus porttitor diam eu quam euismod mattis. Duis ut justo augue. Cras tempus urna quis mauris ornare dapibus. Maecenas quis nibh malesuada, lacinia risus mattis, tempor nibh. Suspendisse convallis ut lorem ut posuere. Integer nec enim mauris. Nunc eget faucibus dolor. Nam vitae hendrerit nisi. Phasellus pulvinar quam sed sapien tincidunt placerat. Maecenas id lacus eu lacus ornare tincidunt ut eu tellus. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus.</p><p>
+    Fusce vel libero vitae augue molestie luctus a vel arcu. Maecenas ut quam purus. Pellentesque vestibulum interdum dui, quis imperdiet lacus scelerisque vitae. Integer luctus erat ut feugiat sodales. Cras laoreet accumsan nisi, eu tincidunt eros euismod ac. Aliquam ut odio lacinia, porttitor velit eu, suscipit metus. Nullam varius sem quis enim blandit consectetur. Donec sit amet arcu est. Donec ac aliquet lectus. Duis volutpat, nunc sed iaculis imperdiet, dolor nulla sagittis nunc, vitae congue neque massa at purus. Praesent at ipsum tristique, dignissim est in, lacinia libero. Maecenas sollicitudin massa lobortis facilisis commodo. Donec non est arcu.</p>
+  </article><article id="nyc">
+    <h1>New York City</h1>
+    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec a urna lobortis, laoreet libero ut, vulputate risus. Aenean rhoncus, tellus nec cursus tempus, magna nisi pellentesque odio, mattis volutpat nunc mauris eget orci. Vivamus quis tellus pellentesque, vulputate diam vel, facilisis risus. Nulla mi felis, euismod ac est in, ultrices tempus nisl. Ut et commodo mi. Sed rutrum porttitor est posuere ullamcorper. Aliquam dapibus nibh id viverra malesuada. Suspendisse quis sem eu nibh varius gravida ut ac magna. Suspendisse massa nisi, malesuada a nisl et, iaculis auctor dolor. Fusce ultrices, mauris non placerat eleifend, nibh sapien sodales velit, sit amet viverra enim erat sed elit. Maecenas facilisis dui eu ullamcorper laoreet. Maecenas pharetra sem id vehicula scelerisque.</p><p>
+    Ut a fringilla orci. Donec nec erat in leo posuere hendrerit. Cras posuere vehicula tellus, ac pharetra mauris sagittis ut. Curabitur at ante malesuada, sagittis dolor ut, laoreet erat. Curabitur eu justo eros. Aliquam ac ipsum quis nulla lacinia varius. Cras tempus aliquet erat at imperdiet. Integer sagittis tincidunt commodo. Fusce lacinia blandit leo vel bibendum. Pellentesque hendrerit nibh ac nunc porta, quis tempor odio aliquet. Nulla sed iaculis sapien. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Integer sollicitudin, lacus vel lobortis luctus, elit magna lobortis turpis, id cursus magna nunc vel magna. Etiam sit amet condimentum nisl. Aenean in leo vehicula ante dapibus laoreet. Nunc in massa a leo sollicitudin facilisis non non orci.</p><p>
+    Nunc lorem nisi, scelerisque quis arcu non, dapibus fermentum arcu. Cras nec facilisis neque. Fusce ultricies nunc nunc, interdum ultrices magna vestibulum in. Suspendisse sed sollicitudin urna. Etiam faucibus aliquet erat. Morbi vel nunc hendrerit arcu hendrerit ultricies. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Nullam tempus luctus sapien vitae porta. Ut eget sapien ut ipsum suscipit porta. Mauris sed dui ac tellus elementum bibendum fringilla id ante. Sed ut felis non lorem venenatis feugiat. Duis cursus, enim sit amet volutpat elementum, diam turpis scelerisque massa, vitae pretium neque velit id arcu. Maecenas at enim id magna gravida bibendum. Vivamus sit amet enim dolor.
+    Aenean sollicitudin massa id diam rutrum aliquam. Aenean eget tincidunt felis. Morbi condimentum arcu orci, at malesuada metus blandit quis. Praesent nec massa elit. Vivamus porttitor diam eu quam euismod mattis. Duis ut justo augue. Cras tempus urna quis mauris ornare dapibus. Maecenas quis nibh malesuada, lacinia risus mattis, tempor nibh. Suspendisse convallis ut lorem ut posuere. Integer nec enim mauris. Nunc eget faucibus dolor. Nam vitae hendrerit nisi. Phasellus pulvinar quam sed sapien tincidunt placerat. Maecenas id lacus eu lacus ornare tincidunt ut eu tellus. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus.</p><p>
+    Fusce vel libero vitae augue molestie luctus a vel arcu. Maecenas ut quam purus. Pellentesque vestibulum interdum dui, quis imperdiet lacus scelerisque vitae. Integer luctus erat ut feugiat sodales. Cras laoreet accumsan nisi, eu tincidunt eros euismod ac. Aliquam ut odio lacinia, porttitor velit eu, suscipit metus. Nullam varius sem quis enim blandit consectetur. Donec sit amet arcu est. Donec ac aliquet lectus. Duis volutpat, nunc sed iaculis imperdiet, dolor nulla sagittis nunc, vitae congue neque massa at purus. Praesent at ipsum tristique, dignissim est in, lacinia libero. Maecenas sollicitudin massa lobortis facilisis commodo. Donec non est arcu.</p>
+  </article><article id="dc">
+    <h1>Washington, D.C.</h1>
+    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec a urna lobortis, laoreet libero ut, vulputate risus. Aenean rhoncus, tellus nec cursus tempus, magna nisi pellentesque odio, mattis volutpat nunc mauris eget orci. Vivamus quis tellus pellentesque, vulputate diam vel, facilisis risus. Nulla mi felis, euismod ac est in, ultrices tempus nisl. Ut et commodo mi. Sed rutrum porttitor est posuere ullamcorper. Aliquam dapibus nibh id viverra malesuada. Suspendisse quis sem eu nibh varius gravida ut ac magna. Suspendisse massa nisi, malesuada a nisl et, iaculis auctor dolor. Fusce ultrices, mauris non placerat eleifend, nibh sapien sodales velit, sit amet viverra enim erat sed elit. Maecenas facilisis dui eu ullamcorper laoreet. Maecenas pharetra sem id vehicula scelerisque.</p><p>
+    Ut a fringilla orci. Donec nec erat in leo posuere hendrerit. Cras posuere vehicula tellus, ac pharetra mauris sagittis ut. Curabitur at ante malesuada, sagittis dolor ut, laoreet erat. Curabitur eu justo eros. Aliquam ac ipsum quis nulla lacinia varius. Cras tempus aliquet erat at imperdiet. Integer sagittis tincidunt commodo. Fusce lacinia blandit leo vel bibendum. Pellentesque hendrerit nibh ac nunc porta, quis tempor odio aliquet. Nulla sed iaculis sapien. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Integer sollicitudin, lacus vel lobortis luctus, elit magna lobortis turpis, id cursus magna nunc vel magna. Etiam sit amet condimentum nisl. Aenean in leo vehicula ante dapibus laoreet. Nunc in massa a leo sollicitudin facilisis non non orci.</p><p>
+    Nunc lorem nisi, scelerisque quis arcu non, dapibus fermentum arcu. Cras nec facilisis neque. Fusce ultricies nunc nunc, interdum ultrices magna vestibulum in. Suspendisse sed sollicitudin urna. Etiam faucibus aliquet erat. Morbi vel nunc hendrerit arcu hendrerit ultricies. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Nullam tempus luctus sapien vitae porta. Ut eget sapien ut ipsum suscipit porta. Mauris sed dui ac tellus elementum bibendum fringilla id ante. Sed ut felis non lorem venenatis feugiat. Duis cursus, enim sit amet volutpat elementum, diam turpis scelerisque massa, vitae pretium neque velit id arcu. Maecenas at enim id magna gravida bibendum. Vivamus sit amet enim dolor.
+    Aenean sollicitudin massa id diam rutrum aliquam. Aenean eget tincidunt felis. Morbi condimentum arcu orci, at malesuada metus blandit quis. Praesent nec massa elit. Vivamus porttitor diam eu quam euismod mattis. Duis ut justo augue. Cras tempus urna quis mauris ornare dapibus. Maecenas quis nibh malesuada, lacinia risus mattis, tempor nibh. Suspendisse convallis ut lorem ut posuere. Integer nec enim mauris. Nunc eget faucibus dolor. Nam vitae hendrerit nisi. Phasellus pulvinar quam sed sapien tincidunt placerat. Maecenas id lacus eu lacus ornare tincidunt ut eu tellus. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus.</p><p>
+    Fusce vel libero vitae augue molestie luctus a vel arcu. Maecenas ut quam purus. Pellentesque vestibulum interdum dui, quis imperdiet lacus scelerisque vitae. Integer luctus erat ut feugiat sodales. Cras laoreet accumsan nisi, eu tincidunt eros euismod ac. Aliquam ut odio lacinia, porttitor velit eu, suscipit metus. Nullam varius sem quis enim blandit consectetur. Donec sit amet arcu est. Donec ac aliquet lectus. Duis volutpat, nunc sed iaculis imperdiet, dolor nulla sagittis nunc, vitae congue neque massa at purus. Praesent at ipsum tristique, dignissim est in, lacinia libero. Maecenas sollicitudin massa lobortis facilisis commodo. Donec non est arcu.</p>
+  </article><article id="philly">
+    <h1>Philadelphia</h1>
+    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec a urna lobortis, laoreet libero ut, vulputate risus. Aenean rhoncus, tellus nec cursus tempus, magna nisi pellentesque odio, mattis volutpat nunc mauris eget orci. Vivamus quis tellus pellentesque, vulputate diam vel, facilisis risus. Nulla mi felis, euismod ac est in, ultrices tempus nisl. Ut et commodo mi. Sed rutrum porttitor est posuere ullamcorper. Aliquam dapibus nibh id viverra malesuada. Suspendisse quis sem eu nibh varius gravida ut ac magna. Suspendisse massa nisi, malesuada a nisl et, iaculis auctor dolor. Fusce ultrices, mauris non placerat eleifend, nibh sapien sodales velit, sit amet viverra enim erat sed elit. Maecenas facilisis dui eu ullamcorper laoreet. Maecenas pharetra sem id vehicula scelerisque.</p><p>
+    Ut a fringilla orci. Donec nec erat in leo posuere hendrerit. Cras posuere vehicula tellus, ac pharetra mauris sagittis ut. Curabitur at ante malesuada, sagittis dolor ut, laoreet erat. Curabitur eu justo eros. Aliquam ac ipsum quis nulla lacinia varius. Cras tempus aliquet erat at imperdiet. Integer sagittis tincidunt commodo. Fusce lacinia blandit leo vel bibendum. Pellentesque hendrerit nibh ac nunc porta, quis tempor odio aliquet. Nulla sed iaculis sapien. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Integer sollicitudin, lacus vel lobortis luctus, elit magna lobortis turpis, id cursus magna nunc vel magna. Etiam sit amet condimentum nisl. Aenean in leo vehicula ante dapibus laoreet. Nunc in massa a leo sollicitudin facilisis non non orci.</p><p>
+    Nunc lorem nisi, scelerisque quis arcu non, dapibus fermentum arcu. Cras nec facilisis neque. Fusce ultricies nunc nunc, interdum ultrices magna vestibulum in. Suspendisse sed sollicitudin urna. Etiam faucibus aliquet erat. Morbi vel nunc hendrerit arcu hendrerit ultricies. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Nullam tempus luctus sapien vitae porta. Ut eget sapien ut ipsum suscipit porta. Mauris sed dui ac tellus elementum bibendum fringilla id ante. Sed ut felis non lorem venenatis feugiat. Duis cursus, enim sit amet volutpat elementum, diam turpis scelerisque massa, vitae pretium neque velit id arcu. Maecenas at enim id magna gravida bibendum. Vivamus sit amet enim dolor.
+    Aenean sollicitudin massa id diam rutrum aliquam. Aenean eget tincidunt felis. Morbi condimentum arcu orci, at malesuada metus blandit quis. Praesent nec massa elit. Vivamus porttitor diam eu quam euismod mattis. Duis ut justo augue. Cras tempus urna quis mauris ornare dapibus. Maecenas quis nibh malesuada, lacinia risus mattis, tempor nibh. Suspendisse convallis ut lorem ut posuere. Integer nec enim mauris. Nunc eget faucibus dolor. Nam vitae hendrerit nisi. Phasellus pulvinar quam sed sapien tincidunt placerat. Maecenas id lacus eu lacus ornare tincidunt ut eu tellus. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus.</p><p>
+    Fusce vel libero vitae augue molestie luctus a vel arcu. Maecenas ut quam purus. Pellentesque vestibulum interdum dui, quis imperdiet lacus scelerisque vitae. Integer luctus erat ut feugiat sodales. Cras laoreet accumsan nisi, eu tincidunt eros euismod ac. Aliquam ut odio lacinia, porttitor velit eu, suscipit metus. Nullam varius sem quis enim blandit consectetur. Donec sit amet arcu est. Donec ac aliquet lectus. Duis volutpat, nunc sed iaculis imperdiet, dolor nulla sagittis nunc, vitae congue neque massa at purus. Praesent at ipsum tristique, dignissim est in, lacinia libero. Maecenas sollicitudin massa lobortis facilisis commodo. Donec non est arcu.</p>
+  </article><article id="la">
+    <h1>Los Angeles</h1>
+    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec a urna lobortis, laoreet libero ut, vulputate risus. Aenean rhoncus, tellus nec cursus tempus, magna nisi pellentesque odio, mattis volutpat nunc mauris eget orci. Vivamus quis tellus pellentesque, vulputate diam vel, facilisis risus. Nulla mi felis, euismod ac est in, ultrices tempus nisl. Ut et commodo mi. Sed rutrum porttitor est posuere ullamcorper. Aliquam dapibus nibh id viverra malesuada. Suspendisse quis sem eu nibh varius gravida ut ac magna. Suspendisse massa nisi, malesuada a nisl et, iaculis auctor dolor. Fusce ultrices, mauris non placerat eleifend, nibh sapien sodales velit, sit amet viverra enim erat sed elit. Maecenas facilisis dui eu ullamcorper laoreet. Maecenas pharetra sem id vehicula scelerisque.</p><p>
+    Ut a fringilla orci. Donec nec erat in leo posuere hendrerit. Cras posuere vehicula tellus, ac pharetra mauris sagittis ut. Curabitur at ante malesuada, sagittis dolor ut, laoreet erat. Curabitur eu justo eros. Aliquam ac ipsum quis nulla lacinia varius. Cras tempus aliquet erat at imperdiet. Integer sagittis tincidunt commodo. Fusce lacinia blandit leo vel bibendum. Pellentesque hendrerit nibh ac nunc porta, quis tempor odio aliquet. Nulla sed iaculis sapien. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Integer sollicitudin, lacus vel lobortis luctus, elit magna lobortis turpis, id cursus magna nunc vel magna. Etiam sit amet condimentum nisl. Aenean in leo vehicula ante dapibus laoreet. Nunc in massa a leo sollicitudin facilisis non non orci.</p><p>
+    Nunc lorem nisi, scelerisque quis arcu non, dapibus fermentum arcu. Cras nec facilisis neque. Fusce ultricies nunc nunc, interdum ultrices magna vestibulum in. Suspendisse sed sollicitudin urna. Etiam faucibus aliquet erat. Morbi vel nunc hendrerit arcu hendrerit ultricies. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Nullam tempus luctus sapien vitae porta. Ut eget sapien ut ipsum suscipit porta. Mauris sed dui ac tellus elementum bibendum fringilla id ante. Sed ut felis non lorem venenatis feugiat. Duis cursus, enim sit amet volutpat elementum, diam turpis scelerisque massa, vitae pretium neque velit id arcu. Maecenas at enim id magna gravida bibendum. Vivamus sit amet enim dolor.
+    Aenean sollicitudin massa id diam rutrum aliquam. Aenean eget tincidunt felis. Morbi condimentum arcu orci, at malesuada metus blandit quis. Praesent nec massa elit. Vivamus porttitor diam eu quam euismod mattis. Duis ut justo augue. Cras tempus urna quis mauris ornare dapibus. Maecenas quis nibh malesuada, lacinia risus mattis, tempor nibh. Suspendisse convallis ut lorem ut posuere. Integer nec enim mauris. Nunc eget faucibus dolor. Nam vitae hendrerit nisi. Phasellus pulvinar quam sed sapien tincidunt placerat. Maecenas id lacus eu lacus ornare tincidunt ut eu tellus. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus.</p><p>
+    Fusce vel libero vitae augue molestie luctus a vel arcu. Maecenas ut quam purus. Pellentesque vestibulum interdum dui, quis imperdiet lacus scelerisque vitae. Integer luctus erat ut feugiat sodales. Cras laoreet accumsan nisi, eu tincidunt eros euismod ac. Aliquam ut odio lacinia, porttitor velit eu, suscipit metus. Nullam varius sem quis enim blandit consectetur. Donec sit amet arcu est. Donec ac aliquet lectus. Duis volutpat, nunc sed iaculis imperdiet, dolor nulla sagittis nunc, vitae congue neque massa at purus. Praesent at ipsum tristique, dignissim est in, lacinia libero. Maecenas sollicitudin massa lobortis facilisis commodo. Donec non est arcu.</p>
+  </article>
+</div>
+
+
+
+	</body>
+</html>
